@@ -7,6 +7,7 @@ import com.example.surveybackend.models.responses.UserRest;
 import com.example.surveybackend.models.responses.ValidationErrors;
 import com.example.surveybackend.repositories.UserRepository;
 import com.example.surveybackend.services.UserService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,7 +37,7 @@ public class UserControllerTests {
     @Autowired
     UserRepository userRepository;
 
-    @BeforeEach
+    @AfterEach
     public void cleanup(){
         userRepository.deleteAll();
     }
