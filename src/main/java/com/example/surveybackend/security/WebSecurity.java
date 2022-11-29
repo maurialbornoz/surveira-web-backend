@@ -47,7 +47,11 @@ public class WebSecurity {
 //
 //        http.addFilterBefore(authenticationJwtTokenFilter, UsernamePasswordAuthenticationFilter.class);
                 .authorizeRequests()
-                .antMatchers(HttpMethod.POST, "/users").permitAll().anyRequest().authenticated();
+                .antMatchers(HttpMethod.POST, "/users").permitAll()
+                .antMatchers(HttpMethod.GET, "/polls/**/questions").permitAll()
+                .antMatchers(HttpMethod.POST, "/polls/reply").permitAll()
+
+                .anyRequest().authenticated();
         http.addFilter(authenticationFilter)
                 .addFilter(new AuthorizationFilter(authenticationManager));
         http.addFilterBefore(authenticationFilter, UsernamePasswordAuthenticationFilter.class);

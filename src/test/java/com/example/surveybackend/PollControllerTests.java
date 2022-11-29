@@ -1,12 +1,15 @@
 package com.example.surveybackend;
 
 import com.example.surveybackend.entities.PollEntity;
+import com.example.surveybackend.entities.UserEntity;
 import com.example.surveybackend.models.request.PollCreationRequestModel;
 import com.example.surveybackend.models.request.UserLoginRequestModel;
 import com.example.surveybackend.models.request.UserRegisterRequestModel;
+import com.example.surveybackend.models.responses.PollRest;
 import com.example.surveybackend.models.responses.ValidationErrors;
 import com.example.surveybackend.repositories.PollRepository;
 import com.example.surveybackend.repositories.UserRepository;
+import com.example.surveybackend.services.PollService;
 import com.example.surveybackend.services.UserService;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,10 +31,15 @@ public class PollControllerTests {
     private static final String API_LOGIN_URL = "/users/login";
     private String token = "";
 
+    private UserEntity user = null;
+
     @Autowired
     TestRestTemplate testRestTemplate;
     @Autowired
     UserService userService;
+
+    @Autowired
+    PollService pollService;
     @Autowired
     UserRepository userRepository;
     @Autowired
@@ -41,7 +49,7 @@ public class PollControllerTests {
     public void initializeObjects(){
         UserRegisterRequestModel user = TestUtil.createValidUser();
         // insert user en h2 db
-        userService.createUser(user);
+        this.user = userService.createUser(user);
         UserLoginRequestModel model = new UserLoginRequestModel();
         model.setEmail(user.getEmail());
         model.setPassword(user.getPassword());
@@ -205,7 +213,27 @@ public class PollControllerTests {
         PollEntity pollDB = pollRepository.findByPollId(response.getBody().get("pollId"));
         assertNotNull(pollDB);
     }
+    @Test
+    public void getPollWithQuestions_withNonExistentPollInDB_returnsInternalServerError(){
+        ResponseEntity<Object> response = getPollWithQuestions(API_URL + "/uuid/questions", Object.class);
+        assertEquals(response.getStatusCode(), HttpStatus.INTERNAL_SERVER_ERROR);
+    }
 
+    @Test
+    public void getPollWithQuestions_withExistentPollInDB_returnsOk(){
+        PollCreationRequestModel model = TestUtil.createValidPoll();
+        String uuid = pollService.createPoll(model, user.getEmail());
+        ResponseEntity<Object> response = getPollWithQuestions(API_URL + "/" + uuid + "/questions", Object.class);
+        assertEquals(response.getStatusCode(), HttpStatus.OK);
+    }
+
+    @Test
+    public void getPollWithQuestions_withExistentPollInDB_returnsPollRest(){
+        PollCreationRequestModel model = TestUtil.createValidPoll();
+        String uuid = pollService.createPoll(model, user.getEmail());
+        ResponseEntity<PollRest> response = getPollWithQuestions(API_URL + "/" + uuid + "/questions", PollRest.class);
+        assertEquals(uuid, response.getBody().getPollId());
+    }
 
 
 
@@ -225,5 +253,9 @@ public class PollControllerTests {
 
     public <T> ResponseEntity<T> createPoll(PollCreationRequestModel model, Class<T> responseType){
         return testRestTemplate.postForEntity(API_URL, model, responseType);
+    }
+
+    public <T> ResponseEntity<T> getPollWithQuestions(String url, Class<T> responseType){
+        return testRestTemplate.getForEntity(url, responseType);
     }
 }
