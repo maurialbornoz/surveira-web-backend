@@ -3,14 +3,18 @@ package com.example.surveybackend.controllers;
 import com.example.surveybackend.entities.PollEntity;
 import com.example.surveybackend.models.request.PollCreationRequestModel;
 import com.example.surveybackend.models.responses.CreatedPollRest;
+import com.example.surveybackend.models.responses.PaginatedPollRest;
 import com.example.surveybackend.models.responses.PollRest;
 import com.example.surveybackend.services.PollService;
 import org.modelmapper.ModelMapper;
+import org.modelmapper.PropertyMap;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/polls")
@@ -28,5 +32,39 @@ public class PollController {
         PollEntity poll = pollService.getPoll(id);
         ModelMapper mapper = new ModelMapper();
         return mapper.map(poll, PollRest.class);
+    }
+
+    @GetMapping
+    public PaginatedPollRest getPolls(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "limit", defaultValue = "10") int limit,
+            Authentication authentication){
+        Page<PollEntity> paginatedPolls = pollService.getPolls(page, limit, authentication.getPrincipal().toString());
+        ModelMapper mapper = new ModelMapper();
+//        mapper.typeMap(PollEntity.class, PollRest.class).addMappings(m -> m.skip(PollRest::setQuestions));
+
+
+        PaginatedPollRest paginatedPollRest = new PaginatedPollRest();
+        paginatedPollRest.setPolls(
+                paginatedPolls.getContent().stream().map(p -> mapper.map(p, PollRest.class)).collect(Collectors.toList())
+        );
+
+        paginatedPollRest.setTotalPages(paginatedPolls.getTotalPages());
+        paginatedPollRest.setTotalRecords(paginatedPolls.getTotalElements());
+        paginatedPollRest.setCurrentPageRecords(paginatedPolls.getNumberOfElements());
+
+        paginatedPollRest.setCurrentPage(paginatedPolls.getPageable().getPageNumber() + 1);
+
+        return paginatedPollRest;
+    }
+
+    @PatchMapping(path = "/{id}")
+    public void togglePollOpened(@PathVariable String id, Authentication authentication){
+        pollService.togglePollOpened(id, authentication.getPrincipal().toString());
+    }
+
+    @DeleteMapping(path = "/{id}")
+    public void deletePoll(@PathVariable String id, Authentication authentication){
+        pollService.deletePoll(id, authentication.getPrincipal().toString());
     }
 }

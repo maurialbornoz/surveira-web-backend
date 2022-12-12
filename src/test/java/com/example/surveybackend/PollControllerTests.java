@@ -5,6 +5,7 @@ import com.example.surveybackend.entities.UserEntity;
 import com.example.surveybackend.models.request.PollCreationRequestModel;
 import com.example.surveybackend.models.request.UserLoginRequestModel;
 import com.example.surveybackend.models.request.UserRegisterRequestModel;
+import com.example.surveybackend.models.responses.PaginatedPollRest;
 import com.example.surveybackend.models.responses.PollRest;
 import com.example.surveybackend.models.responses.ValidationErrors;
 import com.example.surveybackend.repositories.PollRepository;
@@ -17,8 +18,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -47,6 +50,7 @@ public class PollControllerTests {
 
     @BeforeAll
     public void initializeObjects(){
+        testRestTemplate.getRestTemplate().setRequestFactory(new HttpComponentsClientHttpRequestFactory());
         UserRegisterRequestModel user = TestUtil.createValidUser();
         // insert user en h2 db
         this.user = userService.createUser(user);
@@ -68,11 +72,13 @@ public class PollControllerTests {
         userRepository.deleteAll();
     }
 
+    //<editor-fold desc="create poll">
     @Test
     public void createPoll_withoutAuthentication_returnsForbidden(){
         ResponseEntity<Object> response = createPoll(new PollCreationRequestModel(), Object.class);
         assertEquals(response.getStatusCode(), HttpStatus.FORBIDDEN);
     }
+
 
     @Test
     public void createPoll_withAuthenticationWithoutData_returnsBadRequest(){
@@ -213,6 +219,10 @@ public class PollControllerTests {
         PollEntity pollDB = pollRepository.findByPollId(response.getBody().get("pollId"));
         assertNotNull(pollDB);
     }
+
+    //</editor-fold desc="create poll">
+
+    //<editor-fold desc="get polls with questions">
     @Test
     public void getPollWithQuestions_withNonExistentPollInDB_returnsInternalServerError(){
         ResponseEntity<Object> response = getPollWithQuestions(API_URL + "/uuid/questions", Object.class);
@@ -227,6 +237,7 @@ public class PollControllerTests {
         assertEquals(response.getStatusCode(), HttpStatus.OK);
     }
 
+
     @Test
     public void getPollWithQuestions_withExistentPollInDB_returnsPollRest(){
         PollCreationRequestModel model = TestUtil.createValidPoll();
@@ -234,9 +245,130 @@ public class PollControllerTests {
         ResponseEntity<PollRest> response = getPollWithQuestions(API_URL + "/" + uuid + "/questions", PollRest.class);
         assertEquals(uuid, response.getBody().getPollId());
     }
+    //</editor-fold>
 
 
+    //<editor-fold desc="get poll with questions">
+    @Test
+    public void getPolls_withoutAuthentication_returnsForbidden(){
+        ResponseEntity<Object> response = getPolls(API_URL, false, new ParameterizedTypeReference<Object>() {});
+        assertEquals(response.getStatusCode(), HttpStatus.FORBIDDEN);
+    }
 
+    @Test
+    public void getPolls_withAuthentication_returnsOk(){
+        ResponseEntity<Object> response = getPolls(API_URL, true, new ParameterizedTypeReference<Object>() {});
+        assertEquals(response.getStatusCode(), HttpStatus.OK);
+    }
+
+    @Test
+    public void getPolls_withAuthentication_returnsPaginatedPollRest(){
+        pollRepository.save(TestUtil.createValidPollEntity(user));
+        ResponseEntity<PaginatedPollRest> response = getPolls(API_URL, true, new ParameterizedTypeReference<PaginatedPollRest>() {});
+        List<PollRest> polls = response.getBody().getPolls();
+        assertEquals(polls.size(), 1);
+    }
+
+    @Test
+    public void getPolls_withAuthentication_returnsPaginationData(){
+        pollRepository.save(TestUtil.createValidPollEntity(user));
+        ResponseEntity<PaginatedPollRest> response = getPolls(API_URL, true, new ParameterizedTypeReference<PaginatedPollRest>() {});
+        assertEquals(response.getBody().getCurrentPage(), 1);
+        assertEquals(response.getBody().getCurrentPageRecords(), 1);
+        assertEquals(response.getBody().getTotalPages(), 1);
+        assertEquals(response.getBody().getTotalPages(), 1);
+
+    }
+
+    @Test
+    public void getPolls_withAuthenticationWithLimitParameter_returnsLimitedPolls(){
+        pollRepository.save(TestUtil.createValidPollEntity(user));
+        pollRepository.save(TestUtil.createValidPollEntity(user));
+        pollRepository.save(TestUtil.createValidPollEntity(user));
+
+        ResponseEntity<PaginatedPollRest> response = getPolls(true, new ParameterizedTypeReference<PaginatedPollRest>() {},2 );
+        List<PollRest> polls = response.getBody().getPolls();
+
+        assertEquals(polls.size(), 2);
+
+    }
+
+    @Test
+    public void getPolls_withAuthenticationWithPageParameter_returnsSecondPagePolls(){
+        pollRepository.save(TestUtil.createValidPollEntity(user));
+        pollRepository.save(TestUtil.createValidPollEntity(user));
+        pollRepository.save(TestUtil.createValidPollEntity(user));
+
+        ResponseEntity<PaginatedPollRest> response = getPolls(true, new ParameterizedTypeReference<PaginatedPollRest>() {},1, 2 );
+        List<PollRest> polls = response.getBody().getPolls();
+
+        assertEquals(polls.size(), 1);
+
+    }
+
+    //</editor-fold>
+
+    //<editor-fold desc="toggle poll opened">
+    @Test
+    public void togglePollOpened_withoutAuthentication_returnsForbidden(){
+        ResponseEntity<Object> response = togglePollOpened(false, "abc", new ParameterizedTypeReference<Object>() {});
+        assertEquals(response.getStatusCode(), HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    public void togglePollOpened_withAuthenticationToAPollThatDoesNotBelongToTheUser_returnsInternalServerError(){
+        UserEntity otherUser = userService.createUser(TestUtil.createValidUser());
+        PollEntity poll = pollRepository.save(TestUtil.createValidPollEntity(otherUser));
+        ResponseEntity<Object> response = togglePollOpened(true, poll.getPollId(), new ParameterizedTypeReference<Object>() {});
+        assertEquals(response.getStatusCode(), HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @Test
+    public void togglePollOpened_withAuthenticationToAnExistingPollBelongingToTheUser_returnsOk(){
+        PollEntity poll = pollRepository.save(TestUtil.createValidPollEntity(user));
+        ResponseEntity<Object> response = togglePollOpened(true, poll.getPollId(), new ParameterizedTypeReference<Object>() {});
+        assertEquals(response.getStatusCode(), HttpStatus.OK);
+    }
+
+    @Test
+    public void togglePollOpened_withAuthenticationToAnExistingPollBelongingToTheUser_changesOpenedInBD(){
+        PollEntity poll = pollRepository.save(TestUtil.createValidPollEntity(user));
+        togglePollOpened(true, poll.getPollId(), new ParameterizedTypeReference<Object>() {});
+        PollEntity updatedPoll = pollRepository.findById((long)poll.getId());
+        assertEquals(updatedPoll.isOpened(), false);
+    }
+    //</editor-fold>
+
+    //<editor-fold desc="delete poll">
+    @Test
+    public void deletePoll_withoutAuthentication_returnsForbidden(){
+        ResponseEntity<Object> response = deletePoll(false, "abc", new ParameterizedTypeReference<Object>() {});
+        assertEquals(response.getStatusCode(), HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    public void deletePoll_withAuthenticationToAPollThatDoesNotBelongToTheUser_returnsInternalServerError(){
+        UserEntity otherUser = userService.createUser(TestUtil.createValidUser());
+        PollEntity poll = pollRepository.save(TestUtil.createValidPollEntity(otherUser));
+        ResponseEntity<Object> response = deletePoll(true, poll.getPollId(), new ParameterizedTypeReference<Object>() {});
+        assertEquals(response.getStatusCode(), HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @Test
+    public void deletePoll_withAuthenticationToAnExistingPollBelongingToTheUser_returnsOk(){
+        PollEntity poll = pollRepository.save(TestUtil.createValidPollEntity(user));
+        ResponseEntity<Object> response = deletePoll(true, poll.getPollId(), new ParameterizedTypeReference<Object>() {});
+        assertEquals(response.getStatusCode(), HttpStatus.OK);
+    }
+
+    @Test
+    public void deletePoll_withAuthenticationToAnExistingPollBelongingToTheUser_deletePollInBD(){
+        PollEntity poll = pollRepository.save(TestUtil.createValidPollEntity(user));
+        deletePoll(true, poll.getPollId(), new ParameterizedTypeReference<Object>() {});
+        PollEntity deletedPoll = pollRepository.findById((long)poll.getId());
+        assertNull(deletedPoll);
+    }
+    //</editor-fold>
 
 
     public <T> ResponseEntity<T> login(UserLoginRequestModel model, ParameterizedTypeReference responseType){
@@ -249,6 +381,44 @@ public class PollControllerTests {
         headers.setBearerAuth(token);
         HttpEntity<PollCreationRequestModel> entity = new HttpEntity<PollCreationRequestModel>(data, headers);
         return testRestTemplate.exchange(API_URL, HttpMethod.POST, entity, responseType);
+    }
+
+    public <T> ResponseEntity<T> getPolls(boolean auth, ParameterizedTypeReference<T> responseType, int limit) {
+        String url = API_URL + "?limit=" + limit;
+        return getPolls(url, auth, responseType);
+    }
+    public <T> ResponseEntity<T> getPolls(boolean auth, ParameterizedTypeReference<T> responseType, int page, int limit) {
+        String url = API_URL + "?limit=" + limit + "&page=" + page;
+        return getPolls(url, auth, responseType);
+    }
+
+    public <T> ResponseEntity<T> getPolls(String url, boolean auth, ParameterizedTypeReference<T> responseType) {
+        HttpHeaders headers = new HttpHeaders();
+        if(auth){
+            headers.setBearerAuth(token);
+        }
+        HttpEntity<Object> entity = new HttpEntity<Object>(null, headers);
+        return testRestTemplate.exchange(url, HttpMethod.GET, entity, responseType);
+    }
+
+    public <T> ResponseEntity<T> togglePollOpened(boolean auth, String pollId, ParameterizedTypeReference<T> responseType) {
+        HttpHeaders headers = new HttpHeaders();
+        if(auth){
+            headers.setBearerAuth(token);
+        }
+        HttpEntity<Object> entity = new HttpEntity<Object>(null, headers);
+        String url = API_URL + "/" + pollId;
+        return testRestTemplate.exchange(url, HttpMethod.PATCH, entity, responseType);
+    }
+
+    public <T> ResponseEntity<T> deletePoll(boolean auth, String pollId, ParameterizedTypeReference<T> responseType) {
+        HttpHeaders headers = new HttpHeaders();
+        if(auth){
+            headers.setBearerAuth(token);
+        }
+        HttpEntity<Object> entity = new HttpEntity<Object>(null, headers);
+        String url = API_URL + "/" + pollId;
+        return testRestTemplate.exchange(url, HttpMethod.DELETE, entity, responseType);
     }
 
     public <T> ResponseEntity<T> createPoll(PollCreationRequestModel model, Class<T> responseType){
