@@ -1,11 +1,11 @@
 package com.example.surveybackend.controllers;
 
 import com.example.surveybackend.entities.PollEntity;
+import com.example.surveybackend.interfaces.PollResult;
 import com.example.surveybackend.models.request.PollCreationRequestModel;
-import com.example.surveybackend.models.responses.CreatedPollRest;
-import com.example.surveybackend.models.responses.PaginatedPollRest;
-import com.example.surveybackend.models.responses.PollRest;
+import com.example.surveybackend.models.responses.*;
 import com.example.surveybackend.services.PollService;
+import com.example.surveybackend.utils.transformer.PollResultTransformer;
 import org.modelmapper.ModelMapper;
 import org.modelmapper.PropertyMap;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +14,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -66,5 +68,14 @@ public class PollController {
     @DeleteMapping(path = "/{id}")
     public void deletePoll(@PathVariable String id, Authentication authentication){
         pollService.deletePoll(id, authentication.getPrincipal().toString());
+    }
+
+    @GetMapping(path = "/{id}/results")
+    public PollResultWrapperRest getResults(@PathVariable String id, Authentication authentication){
+        List<PollResult> results = pollService.getResults(id, authentication.getPrincipal().toString());
+        PollEntity pollEntity = pollService.getPoll(id);
+        PollResultTransformer transformer = new PollResultTransformer();
+
+        return new PollResultWrapperRest(transformer.transformData(results), pollEntity.getContent(), pollEntity.getId());
     }
 }

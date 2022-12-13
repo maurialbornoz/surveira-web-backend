@@ -4,6 +4,7 @@ import com.example.surveybackend.entities.AnswerEntity;
 import com.example.surveybackend.entities.PollEntity;
 import com.example.surveybackend.entities.QuestionEntity;
 import com.example.surveybackend.entities.UserEntity;
+import com.example.surveybackend.interfaces.PollResult;
 import com.example.surveybackend.models.request.PollCreationRequestModel;
 import com.example.surveybackend.repositories.PollRepository;
 import com.example.surveybackend.repositories.UserRepository;
@@ -13,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -86,5 +88,15 @@ public class PollServiceImpl implements PollService{
         }
 
         pollRepository.delete(poll);
+    }
+
+    @Override
+    public List<PollResult> getResults(String pollId, String email) {
+        UserEntity user = userRepository.findByEmail(email);
+        PollEntity poll = pollRepository.findByPollIdAndUserId(pollId, user.getId());
+        if(poll == null){
+            throw new RuntimeException("Poll not founded");
+        }
+        return pollRepository.getPollResults(poll.getId());
     }
 }
