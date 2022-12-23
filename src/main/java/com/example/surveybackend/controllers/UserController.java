@@ -17,6 +17,11 @@ public class UserController {
     @Autowired
     UserService userService;
 
+    @GetMapping("/hello")
+    public String hello(){
+        return "Hello";
+    }
+
     @PostMapping
     public UserRest createUser(@RequestBody @Valid UserRegisterRequestModel userModel){
         UserEntity user = userService.createUser(userModel);

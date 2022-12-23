@@ -50,6 +50,7 @@ public class WebSecurity {
                 .antMatchers(HttpMethod.POST, "/users").permitAll()
                 .antMatchers(HttpMethod.GET, "/polls/**/questions").permitAll()
                 .antMatchers(HttpMethod.POST, "/polls/reply").permitAll()
+                .antMatchers(HttpMethod.GET, "/users/hello").permitAll()
 
                 .anyRequest().authenticated();
         http.addFilter(authenticationFilter)
